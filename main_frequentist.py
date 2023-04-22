@@ -2,13 +2,14 @@ from __future__ import print_function
 
 import os
 import argparse
+import time
 
 import torch
 import numpy as np
 import torch.nn as nn
 from torch.optim import Adam, lr_scheduler
 
-import data
+from PyTorchBayesianCNN import data
 import utils
 import metrics
 import config_frequentist as cfg
@@ -59,6 +60,23 @@ def validate_model(net, criterion, valid_loader):
         accs.append(metrics.acc(output.detach(), target))
     return valid_loss, np.mean(accs)
 
+def test_model(net, criterion, valid_loader):
+    valid_loss = 0.0
+    net.eval()
+    accs = []
+    targets = []
+    outputs = []
+    for data, target in valid_loader:
+        data, target = data.to(device), target.to(device)
+        output = net(data)
+        targets.append(target)
+        outputs.append(output.detach())
+        loss = criterion(output, target)
+        valid_loss += loss.item()*data.size(0)
+        accs.append(metrics.acc(output.detach(), target))
+    targets = torch.cat(targets)
+    outputs = torch.cat(outputs)
+    return valid_loss, np.mean(accs), metrics.ece(outputs, targets)
 
 def run(dataset, net_type):
 
@@ -84,6 +102,7 @@ def run(dataset, net_type):
     optimizer = Adam(net.parameters(), lr=lr)
     lr_sched = lr_scheduler.ReduceLROnPlateau(optimizer, patience=6, verbose=True)
     valid_loss_min = np.Inf
+    start = time.time()
     for epoch in range(1, n_epochs+1):
 
         train_loss, train_acc = train_model(net, optimizer, criterion, train_loader)
@@ -100,9 +119,13 @@ def run(dataset, net_type):
         if valid_loss <= valid_loss_min:
             print('Validation loss decreased ({:.6f} --> {:.6f}).  Saving model ...'.format(
                 valid_loss_min, valid_loss))
-            torch.save(net.state_dict(), ckpt_name)
+            # torch.save(net.state_dict(), ckpt_name)
             valid_loss_min = valid_loss
-
+    end = time.time()
+    print('Total training time: {:.2f} secs'.format(end - start))
+    test_loss, test_acc, test_ece = test_model(net, criterion, test_loader)
+    print('\tTest Loss: {:.4f} \tTest Accuracy: {:.4f} \tTest ECE: {:.4f}'.format(test_loss, test_acc, test_ece))
+    return end - start, test_loss, test_acc, test_ece
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description = "PyTorch Frequentist Model Training")
