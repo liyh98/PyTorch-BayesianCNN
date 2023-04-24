@@ -7,6 +7,7 @@ import time
 import torch
 import numpy as np
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.optim import Adam, lr_scheduler
 
 from PyTorchBayesianCNN import data
@@ -70,13 +71,13 @@ def test_model(net, criterion, valid_loader):
         data, target = data.to(device), target.to(device)
         output = net(data)
         targets.append(target)
-        outputs.append(output.detach())
+        outputs.append(F.log_softmax(output.detach()))
         loss = criterion(output, target)
         valid_loss += loss.item()*data.size(0)
         accs.append(metrics.acc(output.detach(), target))
     targets = torch.cat(targets)
     outputs = torch.cat(outputs)
-    return valid_loss, np.mean(accs), metrics.ece(outputs, targets)
+    return F.nll_loss(outputs, targets), np.mean(accs), metrics.ece(outputs, targets)
 
 def run(dataset, net_type):
 
@@ -119,7 +120,7 @@ def run(dataset, net_type):
         if valid_loss <= valid_loss_min:
             print('Validation loss decreased ({:.6f} --> {:.6f}).  Saving model ...'.format(
                 valid_loss_min, valid_loss))
-            # torch.save(net.state_dict(), ckpt_name)
+            torch.save(net.state_dict(), ckpt_name)
             valid_loss_min = valid_loss
     end = time.time()
     print('Total training time: {:.2f} secs'.format(end - start))

@@ -113,7 +113,7 @@ def test_model(net, criterion, validloader, num_ens=1, beta_type=0.1, epoch=None
         
     all_log_outputs = torch.cat(all_log_outputs)
     targets = torch.cat(targets)
-    return valid_loss/len(validloader), np.mean(accs), metrics.ece(all_log_outputs, targets)
+    return F.nll_loss(all_log_outputs), np.mean(accs), metrics.ece(all_log_outputs, targets)
 
 
 def run(dataset, net_type):
@@ -161,7 +161,7 @@ def run(dataset, net_type):
         if valid_loss <= valid_loss_max:
             print('Validation loss decreased ({:.6f} --> {:.6f}).  Saving model ...'.format(
                 valid_loss_max, valid_loss))
-            # torch.save(net.state_dict(), ckpt_name)
+            torch.save(net.state_dict(), ckpt_name)
             valid_loss_max = valid_loss
     end = time.time()
     print('Total training time: {:.2f} secs'.format(end - start))
